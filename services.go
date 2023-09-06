@@ -14,7 +14,7 @@ type SubjectRepository interface {
 	SearchSubject(page int, name string, semester int64) (*PaginationMetadata, *[]Subject, error)
 	getSubjectById(id uint) (*Subject, error)
 	CreateSubject(subject *Subject) error
-	UpdateSubject(subject *Subject) error
+	UpdateSubject(update *Subject) (*Subject, error)
 	DeleteSubjectById(id uint) error
 }
 
@@ -66,17 +66,13 @@ func paginateSubject(c *gin.Context) {
 func getSubjectById(c *gin.Context) {
 	subjectId, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
 	subject, err := repo.getSubjectById(uint(subjectId))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
@@ -88,16 +84,12 @@ func createSubject(c *gin.Context) {
 
 	body, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
-		fmt.Println(err)
-		c.JSON(http.StatusBadRequest, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err})
 		return
 	}
 
 	if err := json.Unmarshal(body, &req); err != nil {
-		fmt.Println(err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid requeust",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid requeust"})
 		return
 	}
 
@@ -133,10 +125,7 @@ func updateSubject(c *gin.Context) {
 	}
 
 	if err := json.Unmarshal(body, &req); err != nil {
-		fmt.Println(err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid requeust",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid requeust"})
 		return
 	}
 
@@ -148,18 +137,20 @@ func updateSubject(c *gin.Context) {
 		Instructor: req.Instructor,
 	}
 
-	if err := repo.UpdateSubject(&subject); err != nil {
+	updatedSubject, err := repo.UpdateSubject(&subject)
+	if err != nil {
 		if err == ErrEntityNotFound {
-			c.JSON(http.StatusBadRequest, err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "record with given ID not found"})
 		} else if err == ErrConflict {
-			c.JSON(http.StatusConflict, err)
+			c.JSON(http.StatusConflict, gin.H{"error": "object contain duplicated key"})
 		} else {
+			fmt.Println(err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		}
 		return
 	}
 
-	c.JSON(http.StatusCreated, subject)
+	c.JSON(http.StatusCreated, updatedSubject)
 }
 
 func deleteSubject(c *gin.Context) {
@@ -173,7 +164,7 @@ func deleteSubject(c *gin.Context) {
 
 	if err := repo.DeleteSubjectById(uint(id)); err != nil {
 		if err == ErrEntityNotFound {
-			c.JSON(http.StatusBadRequest, err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "record with given ID not found"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		}

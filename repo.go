@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"strings"
 
 	"gorm.io/gorm"
@@ -99,7 +98,7 @@ func (r *subjectRepo) CreateSubject(subject *Subject) error {
 	return nil
 }
 
-func (r *subjectRepo) UpdateSubject(subject *Subject) error {
+func (r *subjectRepo) UpdateSubject(subject *Subject) (*Subject, error) {
 	subjectTable := SubjectTable{
 		Name:       subject.Name,
 		Semester:   subject.Semester,
@@ -108,21 +107,32 @@ func (r *subjectRepo) UpdateSubject(subject *Subject) error {
 	}
 
 	result := r.db.Model(&SubjectTable{}).Where("id = ?", subject.Id).Updates(&subjectTable)
+	if result.RowsAffected == 0 {
+		return nil, ErrEntityNotFound
+	}
 	if err := result.Error; err != nil {
 		if strings.Contains(err.Error(), "duplicate") {
-			return ErrConflict
+			return nil, ErrConflict
 		}
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrEntityNotFound
-		}
-		return err
+		return nil, err
 	}
 
-	return nil
+	updatedSubjectTable := SubjectTable{}
+	if err := r.db.First(&updatedSubjectTable, subject.Id).Error; err != nil {
+		return nil, err
+	}
+
+	return &Subject{
+		Id:         updatedSubjectTable.ID,
+		Name:       updatedSubjectTable.Name,
+		Semester:   updatedSubjectTable.Semester,
+		Detail:     updatedSubjectTable.Detail,
+		Instructor: updatedSubjectTable.Instructor,
+	}, nil
 }
 
 func (r *subjectRepo) DeleteSubjectById(id uint) error {
-	result := r.db.Delete(&SubjectTable{}, id)
+	result := r.db.Unscoped().Delete(&SubjectTable{}, id)
 	if result.RowsAffected == 0 {
 		return ErrEntityNotFound
 	}
